@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.mockito.Matchers.anyDouble;
@@ -36,11 +35,11 @@ class PriceThrottlerTest {
         final ExecutorService currenciesExecutor = Executors.newSingleThreadExecutor();
         final PriceProcessor priceThrottler = new PriceThrottler(subscribersExecutor, currenciesExecutor);
 
-        PriceProcessor subscriberStub1 = createSubscriberMock(100);
+        PriceProcessor subscriberStub1 = createSubscriberStub(100);
         priceThrottler.subscribe(subscriberStub1);
-        PriceProcessor subscriberStub2 = createSubscriberMock(1000);
+        PriceProcessor subscriberStub2 = createSubscriberStub(1000);
         priceThrottler.subscribe(subscriberStub2);
-        PriceProcessor subscriberStub3 = createSubscriberMock(4000);
+        PriceProcessor subscriberStub3 = createSubscriberStub(4000);
         priceThrottler.subscribe(subscriberStub3);
 
 
@@ -74,10 +73,14 @@ class PriceThrottlerTest {
         log.debug("Currencies Executor {}Terminated", b1 ? "" : "Not ");
     }
 
-    private PriceProcessor createSubscriberMock(long delay) {
+    private PriceProcessor createSubscriberStub(long delay) {
         PriceProcessor subscriberStub = mock(PriceProcessor.class);
         doAnswer((Answer<String>) invocationOnMock -> {
-            log.info(Arrays.toString(invocationOnMock.getArguments()));
+            log.info(
+                    "[{}] Called onPrice with parameters '{}'",
+                    subscriberStub.toString(),
+                    Arrays.toString(invocationOnMock.getArguments())
+            );
             Thread.sleep(delay);
             return "nothing";
         }).when(subscriberStub).onPrice(anyString(), anyDouble());

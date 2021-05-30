@@ -23,16 +23,16 @@ import java.util.stream.Collectors;
  *     <li>subscribersExecutor - java.util.concurrent.ExecutorService for processing subscribers</li>
  *     <li>onPriceExecutor - java.util.concurrent.ExecutorService for processing incoming rates</li>
  * </ul>
- *
+ * <p>
  * Multithreading policies are delegated to a higher level
  * ExecutorService's should be started and stopped at a higher level
  * TODO: Clarify policy of submitting rates after subscribersExecutor is shutdown
- *
+ * <p>
  * java --version
  * openjdk 11.0.11 2021-04-20
  * OpenJDK Runtime Environment AdoptOpenJDK-11.0.11+9 (build 11.0.11+9)
  * OpenJDK 64-Bit Server VM AdoptOpenJDK-11.0.11+9 (build 11.0.11+9, mixed mode)
- *
+ * <p>
  * Maven Version: 3.6.3
  */
 public class PriceThrottler implements PriceProcessor {
@@ -76,20 +76,19 @@ public class PriceThrottler implements PriceProcessor {
     public void subscribe(final PriceProcessor priceProcessor) {
         List<SubscriberAttributes> subscribersFound = getEqualsSubscribers(priceProcessor);
         if (subscribersFound != null && subscribersFound.size() > 0) {
-            log.error("Processor " + priceProcessor.toString() + " already subscribed");
+            log.error("Processor '{}' has already been subscribed", priceProcessor.toString());
             return;
         }
         if (this.subscribersExecutor.isShutdown() || this.subscribersExecutor.isTerminated()) {
-            log.warn("Subscribers Executor has been shutdown. Can't subscribe " + priceProcessor.toString());
+            log.warn("Subscribers Executor has been shutdown. Can't subscribe '{}'", priceProcessor.toString());
             return;
         }
 
         PriorityBlockingQueue<CurrencyRate> subscriberQueue = new PriorityBlockingQueue<>(
                 200, Comparator.comparing(CurrencyRate::getUpdated)
         );
-        Future<?> subscriberTask = null;
-        try{
-            subscriberTask = this.subscribersExecutor.submit(() -> {
+        try {
+            Future<?> subscriberTask = this.subscribersExecutor.submit(() -> {
                 while (!this.subscribersExecutor.isShutdown()) {
                     try {
                         CurrencyRate earliestRate = subscriberQueue.poll(300, TimeUnit.MILLISECONDS);
@@ -103,13 +102,11 @@ public class PriceThrottler implements PriceProcessor {
                 }
                 // TODO: probably need to process the rest of queue. Review requirements
             });
-        } catch (RejectedExecutionException e) {
-            log.error("The processor '{}' hasn't been subscribed: '{}'", priceProcessor.toString(), e);
-        }
-        
-        if (subscriberTask != null) {
+
             log.info("The processor '{}' has been subscribed", priceProcessor.toString());
             this.subscribers.add(new SubscriberAttributes(priceProcessor, subscriberQueue, subscriberTask));
+        } catch (RejectedExecutionException e) {
+            log.error("The processor '{}' hasn't been subscribed: {}", priceProcessor.toString(), e);
         }
     }
 
@@ -127,7 +124,7 @@ public class PriceThrottler implements PriceProcessor {
         }
 
         subscribersFound.forEach(it -> it.getTask().cancel(false));
-        
+
         if (!this.subscribers.removeIf(attr -> attr.getProcessor().equals(priceProcessor))) {
             log.warn("The processor '{}' hasn't been removed", priceProcessor.toString());
         } else {
