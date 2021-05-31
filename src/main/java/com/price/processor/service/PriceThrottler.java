@@ -1,4 +1,4 @@
-package com.price.processor;
+package com.price.processor.service;
 
 import com.price.processor.domain.CurrencyRate;
 import com.price.processor.domain.SubscriberAttributes;
@@ -13,11 +13,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * PriceThrottler: see com.price.processor.PriceProcessor for the spec
+ * PriceThrottler: see com.price.processor.service.PriceProcessor for the spec
  * Required DI:
  * <ul>
  *     <li>subscribersExecutor - java.util.concurrent.ExecutorService for processing subscribers</li>
@@ -69,7 +68,9 @@ public class PriceThrottler implements PriceProcessor {
             CurrencyRate currentRate
     ) {
         queue.remove(currentRate);
-        queue.add(currentRate);
+        if (!queue.offer(currentRate)) {
+            log.error("Unable to add rate '{}'. The queue is full", currentRate);
+        }
     }
 
     @Override
@@ -84,25 +85,13 @@ public class PriceThrottler implements PriceProcessor {
             return;
         }
 
-        PriorityBlockingQueue<CurrencyRate> subscriberQueue = new PriorityBlockingQueue<>(
-                200, Comparator.comparing(CurrencyRate::getUpdated)
-        );
         try {
-            Future<?> subscriberTask = this.subscribersExecutor.submit(() -> {
-                // TODO: extract the task into a separate class
-                while (!this.subscribersExecutor.isShutdown()) {
-                    try {
-                        CurrencyRate earliestRate = subscriberQueue.poll(300, TimeUnit.MILLISECONDS);
-                        if (earliestRate != null) {
-                            log.debug("[{}] Extracted '{}'", priceProcessor.toString(), earliestRate);
-                            priceProcessor.onPrice(earliestRate.getCcyPair(), earliestRate.getRate());
-                        }
-                    } catch (InterruptedException e) {
-                        log.error("Processing interrupted", e);
-                    }
-                }
-                // TODO: probably need to process the rest of queue. Review requirements
-            });
+            PriorityBlockingQueue<CurrencyRate> subscriberQueue = new PriorityBlockingQueue<>(
+                    200, Comparator.comparing(CurrencyRate::getUpdated)
+            );
+            Future<?> subscriberTask = this.subscribersExecutor.submit(
+                    new SubscriberTask(this.subscribersExecutor, subscriberQueue, priceProcessor)
+            );
 
             log.info("The processor '{}' has been subscribed", priceProcessor.toString());
             this.subscribers.add(new SubscriberAttributes(priceProcessor, subscriberQueue, subscriberTask));
@@ -127,7 +116,7 @@ public class PriceThrottler implements PriceProcessor {
         subscribersFound.forEach(it -> it.getTask().cancel(false));
 
         if (!this.subscribers.removeIf(attr -> attr.getProcessor().equals(priceProcessor))) {
-            log.warn("The processor '{}' hasn't been removed", priceProcessor.toString());
+            log.warn("The processor '{}' hasn't been unsubscribed", priceProcessor.toString());
         } else {
             log.info("The processor '{}' has been unsubscribed", priceProcessor.toString());
         }

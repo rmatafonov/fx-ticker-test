@@ -1,4 +1,4 @@
-package com.price.processor;
+package com.price.processor.service;
 
 /**
  * You have to write a PriceThrottler class which will implement the following requirements:

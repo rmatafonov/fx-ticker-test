@@ -1,6 +1,6 @@
 package com.price.processor.domain;
 
-import com.price.processor.PriceProcessor;
+import com.price.processor.service.PriceProcessor;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.PriorityBlockingQueue;
