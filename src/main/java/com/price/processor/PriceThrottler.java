@@ -89,6 +89,7 @@ public class PriceThrottler implements PriceProcessor {
         );
         try {
             Future<?> subscriberTask = this.subscribersExecutor.submit(() -> {
+                // TODO: extract the task into a separate class
                 while (!this.subscribersExecutor.isShutdown()) {
                     try {
                         CurrencyRate earliestRate = subscriberQueue.poll(300, TimeUnit.MILLISECONDS);
